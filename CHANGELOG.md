@@ -4,6 +4,50 @@ All notable changes to Attest are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.1.0] — 2026-10-02
+
+A review found the signature element was not doing its job, and a handful of
+smaller gaps alongside it.
+
+### Fixed
+- **The chain ladder was colour-blind to cryptography.** The spine and the role
+  marker were tinted only by whether a certificate was inside its validity
+  window, and every badge got the same gold wash whatever it said — so
+  `samples/self-signed-sha1.pem`, graded **F 13/100** for SHA-1 over a
+  1024-bit key, rendered with a gold spine and badges whose pixels were
+  identical to the A+ chain's `RSA-4096` / `SHA-256`. The spine, the role
+  marker and each badge now carry the worst finding that actually applies to
+  them: the key badge answers to the `key` findings, the signature badge to
+  the `algorithm` findings, and the spine to the worst finding on that
+  certificate of any kind. Gold while nothing worse than a note was found,
+  amber for a real weakness, red for a serious one. The validity bar is
+  deliberately unchanged — it is the one thing on a rung that *is* about dates.
+  The window now carries a legend saying so, and a test asserts the painted
+  pixels differ between a weak certificate and a sound one, in both themes.
+- **The command line exited `0` when nothing parsed**, so `attest cert.pem &&
+  deploy` could not tell a certificate from a file that held none. It now
+  exits `1` when no certificate was read, `2` when the input could not be read
+  at all, and `0` otherwise — the grade stays in the output, not the exit code.
+- **`--version`** was missing despite a declared release version.
+- Two docstrings copied from a sibling project still named that project and its
+  domain; they now describe this one.
+- Screenshot capture covered only some samples in both themes. The shot list is
+  now derived from `samples/` rather than hand-written, so a sample cannot be
+  left out, and a test asserts every sample is captured in both themes.
+
+### Changed
+- The README contact sheet is three panels instead of two — a chain that joins,
+  a pair that does not, and a certificate whose own parameters are the problem
+  — because two all-gold ladders showed none of the above.
+- The README documents the exit codes, and its Install block now includes the
+  `pip install .` that actually puts `attest` on the PATH.
+- 436 tests, up from 413. Eighteen of the twenty-three new ones are regression
+  tests that were run against the old code and watched to fail first — as was
+  the one existing test that had asserted the wrong exit code. The other five
+  are guards against over-correcting: that a real certificate graded F still
+  exits `0`, and that the grader is never silent about a key or an algorithm,
+  since a badge with nothing to colour by falls back to gold.
+
 ## [1.0.0] — 2026-10-02
 
 First release.

@@ -56,10 +56,60 @@ def test_empty_stdin_exits_two(capsys):
     assert "no certificate given" in err
 
 
-def test_a_paste_with_no_certificate_still_exits_zero(capsys):
+# A shell has to be able to branch on this: `attest cert.pem && deploy` is
+# worthless if a file holding no certificate at all exits 0. The report still
+# prints — the code says whether anything was read, not whether it was good.
+
+def test_a_paste_with_no_certificate_exits_one(capsys):
     code, out, _ = _run(capsys, ["-", "--no-color"], stdin=b"hello")
-    assert code == 0
+    assert code == 1
+    assert "No certificate found" in out
+
+
+def test_a_truncated_pem_exits_one(capsys):
+    broken = (b"-----BEGIN CERTIFICATE-----\n"
+              b"MIIDdzCCAl+gAwIBAgIJAKZ\n")
+    code, out, _ = _run(capsys, ["-", "--no-color"], stdin=broken)
+    assert code == 1
     assert "F" in out
+
+
+def test_a_pasted_private_key_exits_one_and_is_refused_by_name(capsys):
+    key = (b"-----BEGIN PRIVATE KEY-----\n"
+           b"MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ==\n"
+           b"-----END PRIVATE KEY-----\n")
+    code, out, _ = _run(capsys, ["-", "--no-color"], stdin=key)
+    assert code == 1
+    # The distinctive phrase from the parse note, not the ceiling note — which
+    # also says "private key" and would pass this on its own.
+    assert "never wants a private key" in out
+
+
+def test_a_bundle_that_reads_exits_zero_whatever_its_grade(capsys):
+    """The exit code is "did it parse", not "did it pass"."""
+    for name in ("self-signed-sha1.pem", "expired-leaf.pem"):
+        code, out, _ = _run(capsys, [_sample(name), "--no-color"])
+        assert code == 0, name
+        assert out.strip()
+
+
+def test_a_grade_of_f_on_a_real_certificate_is_not_an_error_code(capsys):
+    code, out, _ = _run(capsys, [_sample("self-signed-sha1.pem"), "--no-color"])
+    assert code == 0
+    assert out.lstrip().startswith("F")
+
+
+# --- --version --------------------------------------------------------------
+
+def test_version_prints_the_package_version(capsys):
+    import attest
+
+    with pytest.raises(SystemExit) as exit_info:
+        _run(capsys, ["--version"])
+    assert exit_info.value.code == 0
+    out, err = capsys.readouterr()
+    assert attest.__version__ in (out + err)
+    assert "attest" in (out + err)
 
 
 # --- stdin ------------------------------------------------------------------

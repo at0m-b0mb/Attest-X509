@@ -5,6 +5,10 @@ source of the README's contact sheet.
 
 Runs headless (``QT_QPA_PLATFORM=offscreen``), so it needs no display. It grabs
 each sample in both themes, writing ``images/shot-<sample>-<mode>.png``.
+
+The list of shots is *derived* from ``samples/`` rather than written out, so a
+sample cannot be added — or a theme quietly dropped — and leave a gap in the
+art. A test asserts the same thing from the other side.
 """
 
 from __future__ import annotations
@@ -23,24 +27,30 @@ from attest.ui import theme  # noqa: E402
 from attest.ui.main_window import MainWindow  # noqa: E402
 
 SIZE = (1180, 860)
-SHOTS = [
-    ("modern-chain.pem", theme.LIGHT),
-    ("modern-chain.pem", theme.DARK),
-    ("broken-chain.pem", theme.LIGHT),
-    ("broken-chain.pem", theme.DARK),
-    ("self-signed-sha1.pem", theme.LIGHT),
-    ("self-signed-sha1.pem", theme.DARK),
-    ("expired-leaf.pem", theme.LIGHT),
-]
+SAMPLES = os.path.join(ROOT, "samples")
+MODES = (theme.LIGHT, theme.DARK)
+
+
+def sample_names() -> list[str]:
+    return sorted(f for f in os.listdir(SAMPLES) if f.endswith(".pem"))
+
+
+def shots() -> list[tuple[str, str]]:
+    """Every sample, in every theme. Nothing hand-listed, nothing missed."""
+    return [(name, mode) for name in sample_names() for mode in MODES]
+
+
+def shot_filename(name: str, mode: str) -> str:
+    return f"shot-{os.path.splitext(name)[0]}-{mode}.png"
 
 
 def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     out_dir = os.path.join(ROOT, "images")
     os.makedirs(out_dir, exist_ok=True)
-    samples = os.path.join(ROOT, "samples")
+    samples = SAMPLES
 
-    for name, mode in SHOTS:
+    for name, mode in shots():
         window = MainWindow(mode=mode)
         window.resize(*SIZE)
         with open(os.path.join(samples, name), encoding="utf-8") as handle:
@@ -49,8 +59,7 @@ def main() -> int:
         window.show()
         app.processEvents()
         app.processEvents()
-        base = os.path.splitext(name)[0]
-        path = os.path.join(out_dir, f"shot-{base}-{mode}.png")
+        path = os.path.join(out_dir, shot_filename(name, mode))
         window.grab().save(path)
         print(f"wrote {os.path.relpath(path, ROOT)}  ({mode})")
         window.close()

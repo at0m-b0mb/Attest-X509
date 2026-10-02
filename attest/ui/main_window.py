@@ -322,6 +322,14 @@ class MainWindow(QWidget):
                 f"connector means the child's issuer name equals the parent's "
                 f"subject name — names only. Attest verifies no signature, so a "
                 f"match is a claim that lines up, not a proof.", "Faint"))
+        # The rungs are tinted by severity, so the legend has to say so —
+        # otherwise the colour is something the reader has to guess at.
+        card.add(label(
+            "Each rung's spine, role marker and badges carry the worst finding "
+            "on that certificate: gold where nothing worse than a note was "
+            "found, amber for a real weakness, red for a serious one. The "
+            "validity bar is the exception — it answers only to the dates.",
+            "Faint"))
         ladder = ChainLadder()
         ladder.set_data(bundle, self._mode)
         card.add(ladder)

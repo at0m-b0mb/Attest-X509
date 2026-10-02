@@ -2,8 +2,9 @@
 Small, shared pieces of furniture.
 
 Every card, label and chip the window uses is made here, built from the theme
-tokens so the look is one decision made once. Nothing here knows anything about
-e-mail — these are generic, and the window fills them with meaning.
+tokens so the look is one decision made once. Nothing here knows anything
+about certificates — these are generic, and the window fills them with
+meaning.
 """
 
 from __future__ import annotations

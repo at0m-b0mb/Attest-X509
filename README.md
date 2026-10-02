@@ -18,7 +18,7 @@ calling anything safe.
 ![Python](https://img.shields.io/badge/Python-3.10%2B-7A5D18?style=flat-square)
 ![PyQt6](https://img.shields.io/badge/UI-PyQt6-7A5D18?style=flat-square)
 ![Offline](https://img.shields.io/badge/network-never-2C6249?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-413%20passing-2C6249?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-436%20passing-2C6249?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-847D6E?style=flat-square)
 
 </div>
@@ -45,15 +45,21 @@ three things no browser dialog will:
   solid gold connector when the child's issuer name matches the parent's
   subject name, a dashed red one when it does not.
 
-Then it grades the whole thing, A+ to F.
+Then it grades the whole thing, A+ to F — and the ladder is graded too. Each
+rung's spine, role marker and badges take the colour of the worst finding on
+*that* certificate, so a 1024-bit key or a SHA-1 signature arrives in red
+beside a sound certificate still in gold. A grade of F cannot be drawn looking
+like an A+.
 
 <div align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/screens-dark.png">
-  <img src="images/screens.png" alt="A complete chain graded A+, and a mismatched bundle graded D" width="100%">
+  <img src="images/screens.png" alt="A complete chain graded A+, a mismatched bundle graded D, and a SHA-1 certificate graded F" width="100%">
 </picture>
 <br>
-<sub>A complete chain (A+) beside a leaf bundled with the wrong root (D).</sub>
+<sub>A complete chain (A+), a leaf bundled with the wrong root (D), and a
+SHA-1 certificate over a 1024-bit key (F) — three different things the ladder
+can say.</sub>
 </div>
 
 ## The honest part
@@ -93,11 +99,15 @@ That line shapes the whole grader:
 git clone https://github.com/at0m-b0mb/Attest.git
 cd Attest
 python3 -m pip install -r requirements.txt   # just PyQt6, for the window
+python3 -m pip install .                     # puts `attest` on your PATH
 ```
 
 The analysis engine and the command line need **no dependencies at all** — only
 the standard library, including the ASN.1 DER parser. PyQt6 is required solely
 for the graphical reader.
+
+The second line is only for the `attest` command. Skip it and run everything
+as `python3 -m attest` from the checkout instead; nothing else needs it.
 
 ## Run
 
@@ -114,14 +124,24 @@ top-right.
 **The command line** — same engine, no Qt, pipe-friendly:
 
 ```bash
-attest server.pem                                  # a readable report
+python3 -m attest server.pem                       # always works, no install
+attest server.pem                                  # after `pip install .`
 attest chain.pem --json                            # machine-readable
 cat cert.pem | attest -                            # from a pipe
-python3 -m attest server.pem                       # without installing
+attest --version
 
 # the pipe does the networking; Attest never does
 openssl s_client -connect example.com:443 -showcerts </dev/null | attest -
 ```
+
+The exit code answers *did a certificate come out of this?*, so a shell can
+branch on it:
+
+| Code | Meaning |
+|---|---|
+| `0` | At least one certificate was read. The grade is in the output, not the exit code — Attest reports, and what is good enough to deploy is not its call |
+| `1` | Nothing in the input parsed as a certificate. The report still prints, and says why |
+| `2` | The input could not be read at all — no such file, or nothing on stdin |
 
 ```
   A+   A complete chain, soundly parameterised  (100/100)
@@ -199,12 +219,13 @@ python3 -m pip install -r requirements-dev.txt
 python3 -m pytest -q
 ```
 
-413 tests cover the DER walker (including every malformed shape it must
+436 tests cover the DER walker (including every malformed shape it must
 refuse), the OID table, the PEM extractor, the certificate parser against
 hand-built DER, the full grading pipeline and its honesty ceilings, the CLI's
-text and JSON output, the painted ladder rendered off-screen in both themes,
-and — as the house style demands — every text/background colour pairing against
-WCAG AA.
+text, JSON and exit codes, the painted ladder rendered off-screen in both
+themes — including that an F certificate's rung does *not* come out the colour
+of an A+ one, asserted on the pixels rather than on the intent — and, as the
+house style demands, every text/background colour pairing against WCAG AA.
 
 ## Layout
 
@@ -219,13 +240,14 @@ attest/
     grade.py         findings, the chain, and the letter with its ceiling
   ui/              the window
     theme.py         the design system: one place for every token
-    chain.py         the chain ladder — Attest's signature element
+    chain.py         the chain ladder — Attest's signature element,
+                     tinted by the worst finding on each rung
     widgets.py       cards, chips, key/value rows
     main_window.py   the reader itself
   cli.py           the same engine on the command line
 samples/           synthetic certificates: a modern chain, a mismatched
                    bundle, an expired leaf, a CN-only leaf, a SHA-1 relic
-tests/             413 tests, including the contrast suite
+tests/             436 tests, including the contrast suite
 tools/             sample generation, screenshot capture, repository art
 ```
 

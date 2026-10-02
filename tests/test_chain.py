@@ -60,6 +60,20 @@ def _ink_fraction(pixmap: QPixmap, mode: str) -> float:
     return different / max(1, total)
 
 
+def _ladder(bundle, mode: str = theme.LIGHT) -> ChainLadder:
+    ladder = ChainLadder()
+    ladder.set_data(bundle, mode)
+    return ladder
+
+
+def _colours(pixmap: QPixmap, box: tuple[int, int, int, int]) -> set[int]:
+    """Every distinct pixel value inside *box* — (x0, y0, x1, y1)."""
+    image = pixmap.toImage()
+    x0, y0, x1, y1 = box
+    return {image.pixel(x, y)
+            for y in range(y0, y1) for x in range(x0, x1)}
+
+
 @pytest.mark.parametrize("mode", [theme.LIGHT, theme.DARK])
 def test_the_ladder_paints_something_for_every_sample(app, samples, now, mode):
     for name, text in samples.items():
@@ -131,6 +145,136 @@ def test_a_certificate_with_unreadable_dates_paints_a_caption(app, gen, now):
     assert _ink_fraction(pixmap, theme.DARK) > 0.0
 
 
+# --- the rung has to show the grade -----------------------------------------
+# The ladder is the element the whole tool is built around, so the thing most
+# worth protecting is that it cannot draw a failing certificate as a sound one.
+# These tests check the painter's choice of token *and* the pixels that choice
+# produces, because a correct decision that never reaches the canvas is still
+# an F certificate that looks healthy.
+
+def test_a_weak_certificate_and_a_sound_one_choose_different_accents(
+        app, samples, now):
+    weak = _ladder(analyze(samples["self-signed-sha1.pem"], now=now))
+    sound = _ladder(analyze(samples["modern-chain.pem"], now=now))
+
+    weak_token = weak.accent_token(weak._bundle.certificates[0], now)
+    assert weak_token == "sev_alert"
+    for cert in sound._bundle.certificates:
+        assert sound.accent_token(cert, now) == theme.MARK_SOUND
+        assert sound.accent_token(cert, now) != weak_token
+
+
+def test_each_badge_answers_to_the_findings_about_its_own_subject(
+        app, samples, now):
+    weak = _ladder(analyze(samples["self-signed-sha1.pem"], now=now))
+    cert = weak._bundle.certificates[0]
+    assert weak.badge_token(cert, "key") == "sev_alert"        # RSA-1024
+    assert weak.badge_token(cert, "algorithm") == "sev_alert"  # SHA-1
+
+    sound = _ladder(analyze(samples["modern-chain.pem"], now=now))
+    for other in sound._bundle.certificates:
+        assert sound.badge_token(other, "key") == theme.MARK_SOUND
+        assert sound.badge_token(other, "algorithm") == theme.MARK_SOUND
+
+
+def test_every_badge_has_a_finding_to_take_its_colour_from(app, samples, now):
+    """A badge falls back to gold when the grader said nothing about it.
+
+    That fallback is the same shape as the bug this tinting fixes, so the
+    guard is on the other side: the grader must never be silent about a key
+    or a signature algorithm.
+    """
+    for name, text in samples.items():
+        bundle = analyze(text, now=now)
+        for cert in bundle.certificates:
+            categories = {f.category for f in bundle.findings_for(cert.index)}
+            assert "key" in categories, f"{name}, certificate {cert.index + 1}"
+            assert "algorithm" in categories, f"{name}, certificate {cert.index + 1}"
+
+
+def test_a_weak_key_leaves_a_sound_signature_badge_alone(app, gen, now):
+    """Per-badge, not per-certificate: one bad parameter, one red badge."""
+    from datetime import datetime, timezone
+
+    der = gen.certificate(
+        serial=7, sig_alg=gen.alg_rsa(gen.OID_SHA256_RSA),
+        issuer=gen.ROOT_NAME,
+        not_before=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        not_after=datetime(2027, 5, 1, tzinfo=timezone.utc),
+        subject=gen.LEAF_NAME, spki=gen.rsa_spki(1024, 4),
+        extensions=[gen.ext_san(dns=["shop.northwind.example"])],
+        signature_seed=4)
+    bundle = analyze(gen.pem(der), now=now)
+    cert = bundle.certificates[0]
+    ladder = _ladder(bundle)
+
+    assert cert.public_key.badge == "RSA-1024"
+    assert ladder.badge_token(cert, "key") == "sev_alert"
+    assert ladder.badge_token(cert, "algorithm") == theme.MARK_SOUND
+    assert ladder.accent_token(cert, now) == "sev_alert"
+
+
+def test_a_warning_and_an_alert_are_not_the_same_accent(app, gen, now):
+    """A 2048-bit key on a 10-year leaf is a warning, not an alert."""
+    from datetime import datetime, timezone
+
+    der = gen.certificate(
+        serial=8, sig_alg=gen.alg_rsa(gen.OID_SHA256_RSA),
+        issuer=gen.ROOT_NAME,
+        not_before=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        not_after=datetime(2036, 6, 1, tzinfo=timezone.utc),
+        subject=gen.LEAF_NAME, spki=gen.rsa_spki(2048, 5),
+        extensions=[gen.ext_san(dns=["shop.northwind.example"]),
+                    gen.ext_key_usage("digitalSignature"),
+                    gen.ext_ext_key_usage(gen.OID_SERVER_AUTH),
+                    gen.ext_basic_constraints(False)],
+        signature_seed=5)
+    bundle = analyze(gen.pem(der), now=now)
+    cert = bundle.certificates[0]
+    ladder = _ladder(bundle)
+
+    assert ladder.worst_severity(cert) == "warning"
+    assert ladder.accent_token(cert, now) == "sev_warning"
+    for mode in (theme.LIGHT, theme.DARK):
+        assert (theme.color("sev_warning", mode)
+                != theme.color("sev_alert", mode))
+
+
+def test_an_ungraded_bundle_still_judges_the_rung_by_its_dates(app, samples, now):
+    """``read`` without ``grade_bundle`` leaves no findings to colour by."""
+    from attest.core.grade import read
+
+    expired = read(samples["expired-leaf.pem"])
+    assert not expired.findings
+    assert _ladder(expired).accent_token(expired.certificates[0], now) \
+        == "sev_alert"
+
+    current = read(samples["modern-chain.pem"])
+    ladder = _ladder(current)
+    for cert in current.certificates:
+        assert ladder.accent_token(cert, now) == theme.MARK_SOUND
+    assert not _render(current, theme.LIGHT).isNull()
+
+
+@pytest.mark.parametrize("mode", [theme.LIGHT, theme.DARK])
+def test_the_severity_colour_reaches_the_painted_pixels(app, samples, now, mode):
+    """Tokens are a decision; this is the canvas the reader actually sees."""
+    alert = QColor(theme.color("sev_alert", mode)).rgb()
+    gold = QColor(theme.color(theme.MARK_SOUND, mode)).rgb()
+    # The top rung's spine and its two badges, which is where the verdict is.
+    box = (0, 10, 320, 102)
+
+    weak = _colours(_render(analyze(samples["self-signed-sha1.pem"], now=now),
+                            mode), box)
+    sound = _colours(_render(analyze(samples["modern-chain.pem"], now=now),
+                             mode), box)
+
+    assert alert in weak, f"the F rung carries no alert colour in {mode}"
+    assert gold not in weak, f"the F rung is still painted gold in {mode}"
+    assert gold in sound, f"the A+ rung lost its gold in {mode}"
+    assert alert not in sound, f"the A+ rung gained an alert colour in {mode}"
+
+
 @pytest.mark.parametrize("mode", [theme.LIGHT, theme.DARK])
 def test_the_whole_window_builds_and_renders(app, samples, mode):
     """The window itself, end to end, with a real report on screen."""
@@ -147,6 +291,25 @@ def test_the_whole_window_builds_and_renders(app, samples, mode):
     assert not pixmap.isNull()
     assert _ink_fraction(pixmap, mode) > 0.2
     window.close()
+
+
+def test_the_capture_tool_covers_every_sample_in_both_themes(app, samples):
+    """The art is a claim about the whole sample set, so it has to be one."""
+    import capture_screenshots
+
+    planned = capture_screenshots.shots()
+    assert sorted(capture_screenshots.sample_names()) == sorted(samples)
+    for name in samples:
+        for mode in (theme.LIGHT, theme.DARK):
+            assert (name, mode) in planned, f"{name} is missing in {mode}"
+    assert len(planned) == len(samples) * 2
+
+    images = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "images")
+    for name, mode in planned:
+        shot = os.path.join(images,
+                            capture_screenshots.shot_filename(name, mode))
+        assert os.path.exists(shot), f"{os.path.basename(shot)} was never captured"
 
 
 def test_clearing_the_window_returns_it_to_the_placeholder(app, samples):

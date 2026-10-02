@@ -15,6 +15,7 @@ TEXT_TOKENS = ["ink", "ink_muted", "ink_faint", "brass",
                "hop_external", "hop_internal"]
 GROUNDS = ["canvas", "surface", "surface_alt", "sunken", "rail"]
 WASHES = {
+    "brass": "brass_wash",
     "sev_good": "sev_good_wash",
     "sev_notice": "sev_notice_wash",
     "sev_warning": "sev_warning_wash",
@@ -71,3 +72,53 @@ def test_stylesheet_builds_for_both_modes():
 def test_grade_tokens_cover_every_letter():
     for letter in ["A+", "A", "A-", "B+", "B", "C", "C-", "D", "F"]:
         assert theme.grade_token(letter) in theme.PALETTE
+
+
+# --- marks: the colours the ladder paints with -------------------------------
+# A mark carries no words, so these are the only vocabulary a painted rung has
+# for "how bad is this". If two severities collapse onto the same colour, the
+# widget cannot tell the reader them apart however carefully it is drawn.
+
+def test_the_mark_map_covers_every_severity_the_model_can_report():
+    from attest.core.model import Severity
+
+    for severity in Severity:
+        assert severity.value in theme.MARK_TOKEN, severity
+
+
+def test_a_mark_stays_gold_until_something_is_actually_wrong():
+    assert theme.mark_token("good") == theme.MARK_SOUND
+    assert theme.mark_token("info") == theme.MARK_SOUND
+    assert theme.mark_token(None) == theme.MARK_SOUND
+    assert theme.mark_token("warning") == "sev_warning"
+    assert theme.mark_token("alert") == "sev_alert"
+
+
+def test_a_real_weakness_is_a_different_colour_from_sound():
+    for severity in ("warning", "alert"):
+        for mode in (theme.LIGHT, theme.DARK):
+            weak = theme.color(theme.mark_token(severity), mode)
+            sound = theme.color(theme.MARK_SOUND, mode)
+            assert weak != sound, f"{severity} is indistinguishable in {mode}"
+
+
+def test_every_mark_token_resolves_to_a_real_wash_and_edge():
+    for severity in theme.MARK_TOKEN:
+        token = theme.mark_token(severity)
+        assert token in theme.PALETTE, severity
+        assert theme.wash_token(token) in theme.PALETTE, severity
+        assert theme.edge_token(token) in theme.PALETTE, severity
+
+
+@pytest.mark.parametrize("mode", [theme.LIGHT, theme.DARK])
+def test_mark_ink_is_legible_on_the_wash_it_chooses(mode):
+    for severity in theme.MARK_TOKEN:
+        token = theme.mark_token(severity)
+        ratio = theme.contrast(theme.color(token, mode),
+                               theme.color(theme.wash_token(token), mode))
+        assert ratio >= 4.5, f"{token} on its wash in {mode}: {ratio:.2f}:1"
+
+
+def test_an_unknown_token_still_gets_a_usable_wash_and_edge():
+    assert theme.wash_token("ink") == "surface_alt"
+    assert theme.edge_token("ink") == "ink"

@@ -15,6 +15,16 @@ subject name, and a dashed red one when it does not, labelled either way. That
 single picture answers the question behind most TLS misconfigurations — "is
 this actually a chain?" — which a list of fields cannot.
 
+Colour on a rung is the grade, not decoration. The spine, the role marker and
+each badge take the colour of the worst finding that actually applies to them:
+the key badge answers to the ``key`` findings, the signature badge to the
+``algorithm`` findings, and the spine to the worst finding on that certificate
+of any kind. So a 1024-bit modulus or a SHA-1 signature arrives in red, beside
+a gold spine on the certificate above it that is sound — and a grade of F
+cannot be drawn looking like an A+. The one element that stays a date is the
+validity bar, because it is the only thing on the rung that *is* about dates;
+tinting it by cryptography would be a lie about the calendar.
+
 It is painted rather than assembled from labels for the same reason. And the
 one thing it refuses to draw is a tick: a matched join is a match of *names*,
 not a verified signature, and the legend says so.
@@ -110,20 +120,61 @@ class ChainLadder(QWidget):
                                         width - _SIDE * 2, _PAD + 4))
         painter.end()
 
+    # --- what the grader found about one rung -------------------------------
+    def worst_severity(self, cert: Certificate,
+                       *categories: str) -> str | None:
+        """The worst severity the grader recorded against this certificate.
+
+        Narrow it with *categories* to ask about one part of the rung — the
+        key badge wants ``"key"``, the signature badge ``"algorithm"`` — and
+        pass none to ask about the whole certificate. Returns ``None`` when
+        the grader said nothing, which is the case for a bundle that was read
+        but never graded.
+        """
+        bundle = self._bundle
+        if bundle is None:
+            return None
+        found = bundle.findings_for(cert.index)
+        if categories:
+            found = [f for f in found if f.category in categories]
+        if not found:
+            return None
+        return max(found, key=lambda f: f.severity.rank).severity.value
+
+    def accent_token(self, cert: Certificate, now: datetime) -> str:
+        """The spine and role-marker colour for this certificate.
+
+        The worst finding on the certificate, whatever it is about — an
+        elapsed date, a 1024-bit modulus, a missing subjectAltName. Date
+        currency is the fallback rather than the rule, so that an ungraded
+        bundle still draws something true.
+        """
+        worst = self.worst_severity(cert)
+        if worst is None:
+            return theme.MARK_SOUND if cert.is_current(now) else "sev_alert"
+        return theme.mark_token(worst)
+
+    def badge_token(self, cert: Certificate, *categories: str) -> str:
+        """The colour of one badge — the worst finding in its own subject."""
+        return theme.mark_token(self.worst_severity(cert, *categories))
+
     # --- one rung -----------------------------------------------------------
     def _draw_rung(self, painter: QPainter, cert: Certificate, box: QRectF,
                    now: datetime) -> None:
         c = lambda n: QColor(theme.color(n, self._mode))  # noqa: E731
 
-        current = cert.is_current(now)
-        accent = c("brass") if current else c("sev_alert")
+        token = self.accent_token(cert, now)
+        sound = token == theme.MARK_SOUND
+        accent = c(token)
 
         painter.setPen(QPen(c("rule"), 1))
         painter.setBrush(QBrush(c("surface")))
         painter.drawRoundedRect(box.adjusted(0.5, 0.5, -0.5, -0.5),
                                 _RADIUS, _RADIUS)
 
-        # A gold (or red) spine down the left edge marks the rung's standing.
+        # The spine down the left edge is the rung's standing in one stroke:
+        # gold while nothing worse than a note was found, amber for a real
+        # weakness, red for a serious one.
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(accent))
         painter.drawRoundedRect(
@@ -135,9 +186,11 @@ class ChainLadder(QWidget):
         marker = cert.role.marker
         marker_w = QFontMetrics(marker_font).horizontalAdvance(marker) + 6
 
-        # role marker, top right
-        painter.setPen(accent if cert.role is not Role.INTERMEDIATE
-                       else c("ink_faint"))
+        # Role marker, top right. An intermediate's position is the least
+        # interesting thing about it, so it stays quiet — unless the accent has
+        # something to say, in which case the marker says it too.
+        quiet_marker = sound and cert.role is Role.INTERMEDIATE
+        painter.setPen(c("ink_faint") if quiet_marker else accent)
         painter.setFont(marker_font)
         painter.drawText(QRectF(right - marker_w, box.top() + 11, marker_w, 14),
                          Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -162,30 +215,37 @@ class ChainLadder(QWidget):
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          _elide(issued_by, right - left, issuer_font))
 
-        # key / signature badges
-        badges = [cert.public_key.badge]
+        # Key and signature badges, each wearing the verdict on the thing it
+        # names rather than a uniform gold. "RSA-1024" is not the same news as
+        # "RSA-4096", and the badge is where a reader looks for it.
         alg = cert.signature_algorithm
         from ..core.oids import signature_algorithm
         sig = signature_algorithm(cert.signature_algorithm_oid)
-        badges.append(sig.hash_name or sig.name if sig else (alg or "unknown alg"))
+        badges = [
+            (cert.public_key.badge, ("key",)),
+            (sig.hash_name or sig.name if sig else (alg or "unknown alg"),
+             ("algorithm",)),
+        ]
         x = left
-        for text in badges:
-            x = self._draw_badge(painter, text, x, box.top() + 50)
+        for text, categories in badges:
+            x = self._draw_badge(painter, text, x, box.top() + 50,
+                                 self.badge_token(cert, *categories))
 
         self._draw_validity_bar(
             painter, cert,
             QRectF(x + 8, box.top() + 52, max(40.0, right - x - 8), 18), now)
 
-    def _draw_badge(self, painter: QPainter, text: str, x: float,
-                    y: float) -> float:
+    def _draw_badge(self, painter: QPainter, text: str, x: float, y: float,
+                    token: str = theme.MARK_SOUND) -> float:
+        """One badge, in *token*'s voice: pale wash, matching edge, its own ink."""
         c = lambda n: QColor(theme.color(n, self._mode))  # noqa: E731
         font = self._font("label")
         width = QFontMetrics(font).horizontalAdvance(text) + 14
         rect = QRectF(x, y, width, 18)
-        painter.setPen(QPen(c("brass_edge"), 1))
-        painter.setBrush(QBrush(c("brass_wash")))
+        painter.setPen(QPen(c(theme.edge_token(token)), 1))
+        painter.setBrush(QBrush(c(theme.wash_token(token))))
         painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3)
-        painter.setPen(c("brass"))
+        painter.setPen(c(token))
         painter.setFont(font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
         return x + width + 6

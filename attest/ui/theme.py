@@ -1,7 +1,7 @@
 """
 The design system.
 
-One place for every colour, typeface and measurement, so Herald looks designed
+One place for every colour, typeface and measurement, so Attest looks designed
 rather than assembled. Nothing here draws anything — a widget asks for a token
 and gets a value.
 
@@ -170,6 +170,42 @@ SEVERITY_TOKEN = {
     "warning": "sev_warning",
     "alert": "sev_alert",
 }
+
+# A *mark* carries no words — a spine down a rung, the wash behind a badge, a
+# role marker. It has to say "how bad is this" in colour alone, so the five
+# severities collapse into the house gold plus the two that are genuinely
+# alarming. "Good" and "info" leave a mark as it was, because gold is what
+# sound looks like here; "notice" takes the notice gold, which is the same
+# hue by design, so the ladder agrees with the chip beside the finding.
+MARK_SOUND = "brass"
+
+MARK_TOKEN = {
+    "good": MARK_SOUND,
+    "info": MARK_SOUND,
+    "notice": "sev_notice",
+    "warning": "sev_warning",
+    "alert": "sev_alert",
+}
+
+
+def mark_token(severity: str | None) -> str:
+    """Which accent a painted mark wears, given the worst severity on it.
+
+    ``None`` means nothing was found to say about it — which is treated as
+    sound rather than as a problem, because an ungraded bundle is not a
+    failing one.
+    """
+    return MARK_TOKEN.get(severity or "", MARK_SOUND)
+
+
+def wash_token(token: str) -> str:
+    """The pale companion of an accent, for filling a shape behind text."""
+    return token + "_wash" if token + "_wash" in PALETTE else "surface_alt"
+
+
+def edge_token(token: str) -> str:
+    """The line around that shape — a dedicated edge where one exists."""
+    return token + "_edge" if token + "_edge" in PALETTE else token
 
 
 def grade_token(letter: str) -> str:

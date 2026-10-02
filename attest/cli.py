@@ -12,6 +12,19 @@ output.
 
 The pipe in the middle of that second line is doing the networking. Attest
 never does: it reads whatever bytes arrive on stdin and nothing else.
+
+The exit code answers one question — *did a certificate come out of this?* —
+so that ``attest server.pem && deploy`` means something:
+
+``0``
+    At least one certificate was read. The grade is in the output, not in the
+    exit code: Attest reports, and what counts as good enough to deploy is not
+    its call to make.
+``1``
+    Nothing in the input parsed as a certificate. The report still prints, and
+    says why.
+``2``
+    The input could not be read at all — no such file, or nothing on stdin.
 """
 
 from __future__ import annotations
@@ -20,6 +33,7 @@ import argparse
 import json
 import sys
 
+from . import __version__
 from .core.grade import analyze, plural
 from .core.model import Bundle
 
@@ -236,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="machine-readable output")
     parser.add_argument("--no-color", action="store_true",
                         help="plain text, no ANSI")
+    parser.add_argument("--version", action="version",
+                        version=f"attest {__version__}")
     args = parser.parse_args(argv)
 
     if args.source == "-":
@@ -258,7 +274,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         color = sys.stdout.isatty() and not args.no_color
         print(_report_text(bundle, color))
-    return 0
+
+    # The report is printed either way — a paste that held no certificate still
+    # gets its F and its reason. The code is what a shell can branch on, and
+    # "nothing parsed" has to be distinguishable from "read it".
+    return 0 if bundle.certificates else 1
 
 
 if __name__ == "__main__":

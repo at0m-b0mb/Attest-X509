@@ -387,13 +387,19 @@ def main() -> int:
     print("banner (light + dark):")
     render_banner(os.path.join(IMG, "banner.png"), dark=False)
     render_banner(os.path.join(IMG, "banner-dark.png"), dark=True)
+    # Three panels, chosen so the sheet shows the three different things a
+    # ladder can say: a chain that joins and is sound, a pair that does not
+    # join, and a single certificate whose own parameters are the problem.
+    # Two all-gold ladders would hide the one signal worth advertising.
     print("contact sheet (light + dark):")
     render_contact_sheet(os.path.join(IMG, "screens.png"),
                          ["shot-modern-chain-light.png",
-                          "shot-broken-chain-light.png"], dark=False)
+                          "shot-broken-chain-light.png",
+                          "shot-self-signed-sha1-light.png"], dark=False)
     render_contact_sheet(os.path.join(IMG, "screens-dark.png"),
                          ["shot-modern-chain-dark.png",
-                          "shot-broken-chain-dark.png"], dark=True)
+                          "shot-broken-chain-dark.png",
+                          "shot-self-signed-sha1-dark.png"], dark=True)
     return 0
 
 
