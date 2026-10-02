@@ -36,9 +36,10 @@ smaller gaps alongside it.
   left out, and a test asserts every sample is captured in both themes.
 
 ### Changed
-- The README contact sheet is three panels instead of two — a chain that joins,
-  a pair that does not, and a certificate whose own parameters are the problem
-  — because two all-gold ladders showed none of the above.
+- The README contact sheet now pairs a certificate whose own parameters are the
+  problem (`self-signed-sha1`, F) with a chain that joins all the way to its
+  root (`modern-chain`, A+), because the two all-gold ladders it held before
+  showed neither.
 - The README documents the exit codes, and its Install block now includes the
   `pip install .` that actually puts `attest` on the PATH.
 - 436 tests, up from 413. Eighteen of the twenty-three new ones are regression

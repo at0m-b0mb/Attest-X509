@@ -74,6 +74,9 @@ class MainWindow(QWidget):
         self._mode_choice = mode
         self._mode = theme.resolve(mode)
         self._bundle: Bundle | None = None
+        # Pinned by tools/capture_screenshots.py so the committed art is
+        # byte-reproducible; None means read the real clock.
+        self.fixed_now = None
 
         self.setWindowTitle("Attest")
         self.resize(1180, 800)
@@ -215,7 +218,7 @@ class MainWindow(QWidget):
             self._set_placeholder(
                 "Paste a PEM certificate, or load a sample, to begin.")
             return
-        self._bundle = analyze(source)
+        self._bundle = analyze(source, now=self.fixed_now)
         self._render_report(self._bundle)
 
     def _on_open(self) -> None:
@@ -236,7 +239,7 @@ class MainWindow(QWidget):
             self.source.setPlainText(
                 f"(read {len(raw)} bytes of raw DER from "
                 f"{os.path.basename(path)})")
-            self._bundle = analyze(raw)
+            self._bundle = analyze(raw, now=self.fixed_now)
             self._render_report(self._bundle)
             return
         self.source.setPlainText(raw.decode("utf-8", errors="replace"))

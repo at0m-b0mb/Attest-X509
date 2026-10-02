@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime, timezone
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -25,6 +26,10 @@ from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from attest.ui import theme  # noqa: E402
 from attest.ui.main_window import MainWindow  # noqa: E402
+
+# A pinned clock: the chain ladder draws "now" into the validity bars,
+# so without this every capture differs and the repo churns.
+FIXED_NOW = datetime(2026, 10, 2, 12, 0, 0, tzinfo=timezone.utc)
 
 SIZE = (1180, 860)
 SAMPLES = os.path.join(ROOT, "samples")
