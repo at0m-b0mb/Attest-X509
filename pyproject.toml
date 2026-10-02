@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "attest-x509"
+version = "1.0.0"
+description = "Read the certificate — an offline X.509 certificate reader and grader."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "at0m-b0mb" }]
+keywords = ["x509", "certificate", "tls", "ssl", "pem", "der", "asn1", "pki", "security", "forensics"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Security",
+]
+dependencies = ["PyQt6>=6.5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/at0m-b0mb/Attest"
+Source = "https://github.com/at0m-b0mb/Attest"
+
+[project.scripts]
+attest = "attest.cli:main"
+
+[project.gui-scripts]
+attest-gui = "attest.app:main"
+
+[tool.setuptools]
+packages = ["attest", "attest.core", "attest.ui"]
